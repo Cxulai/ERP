@@ -2,7 +2,7 @@
 
 ## 一、系统简介
 
-一个轻量级的企业资源计划（ERP）管理系统，采用 Python Flask + SQLite 构建，适合小微企业日常经营管理使用。
+一个轻量级的企业资源计划（ERP）管理系统，采用 Python Flask + SQLAlchemy 构建，支持 SQLite（本地）和 PostgreSQL（云端部署），适合小微企业日常经营管理使用。
 
 ### 核心功能模块
 
@@ -33,7 +33,7 @@
 打开终端（PowerShell / CMD），进入项目目录：
 
 ```bash
-cd C:\Users\ASUS\erp-system
+cd erp-system
 ```
 
 安装依赖：
@@ -235,8 +235,8 @@ A: 这是为了防止误删。请先将订单取消，再删除。
 ```
 前端: HTML5 + CSS3 + Vanilla JavaScript + Chart.js
 后端: Python 3 + Flask
-数据库: SQLite3
-架构: SPA (Hash 路由) + RESTful API
+数据库: SQLite3 (本地) / PostgreSQL (Vercel 云端)
+架构: SPA (Hash 路由) + RESTful API + SQLAlchemy ORM
 ```
 
 项目结构：
@@ -244,9 +244,11 @@ A: 这是为了防止误删。请先将订单取消，再删除。
 ```
 erp-system/
 ├── app.py                 # Flask 主程序入口
-├── database.py            # 数据库初始化与种子数据
+├── database.py            # SQLAlchemy 模型与数据库初始化
 ├── requirements.txt       # Python 依赖
-├── erp.db                 # SQLite 数据库（运行后自动生成）
+├── vercel.json            # Vercel 部署配置
+├── api/index.py           # Vercel WSGI 入口
+├── erp.db                 # SQLite 数据库（本地运行自动生成）
 ├── routes/                # API 路由蓝图
 │   ├── dashboard.py       # 仪表盘统计
 │   ├── products.py        # 商品与库存管理

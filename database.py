@@ -1,199 +1,177 @@
-import sqlite3
+from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 import random
+import os
 
-DB_PATH = 'erp.db'
+db = SQLAlchemy()
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+# ── Models ──────────────────────────────────────────────
 
-def init_db():
-    conn = get_db()
-    cursor = conn.cursor()
+class Product(db.Model):
+    __tablename__ = 'products'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    code = db.Column(db.String(50), unique=True, nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(100), default='')
+    unit = db.Column(db.String(20), default='个')
+    sale_price = db.Column(db.Float, nullable=False, default=0)
+    purchase_price = db.Column(db.Float, nullable=False, default=0)
+    stock_qty = db.Column(db.Integer, nullable=False, default=0)
+    min_stock = db.Column(db.Integer, nullable=False, default=10)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    cursor.executescript('''
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT NOT NULL UNIQUE,
-            name TEXT NOT NULL,
-            category TEXT DEFAULT '',
-            unit TEXT DEFAULT '个',
-            sale_price REAL NOT NULL DEFAULT 0,
-            purchase_price REAL NOT NULL DEFAULT 0,
-            stock_qty INTEGER NOT NULL DEFAULT 0,
-            min_stock INTEGER NOT NULL DEFAULT 10,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+class Customer(db.Model):
+    __tablename__ = 'customers'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(200), nullable=False)
+    contact_person = db.Column(db.String(100), default='')
+    phone = db.Column(db.String(50), default='')
+    email = db.Column(db.String(100), default='')
+    address = db.Column(db.String(500), default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-        CREATE TABLE IF NOT EXISTS customers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            contact_person TEXT DEFAULT '',
-            phone TEXT DEFAULT '',
-            email TEXT DEFAULT '',
-            address TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+class Supplier(db.Model):
+    __tablename__ = 'suppliers'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(200), nullable=False)
+    contact_person = db.Column(db.String(100), default='')
+    phone = db.Column(db.String(50), default='')
+    email = db.Column(db.String(100), default='')
+    address = db.Column(db.String(500), default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-        CREATE TABLE IF NOT EXISTS suppliers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            contact_person TEXT DEFAULT '',
-            phone TEXT DEFAULT '',
-            email TEXT DEFAULT '',
-            address TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+class SalesOrder(db.Model):
+    __tablename__ = 'sales_orders'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    order_no = db.Column(db.String(50), unique=True, nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=False)
+    order_date = db.Column(db.String(20), nullable=False)
+    total_amount = db.Column(db.Float, nullable=False, default=0)
+    paid_amount = db.Column(db.Float, nullable=False, default=0)
+    status = db.Column(db.String(20), nullable=False, default='draft')
+    notes = db.Column(db.Text, default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    customer = db.relationship('Customer', backref='sales_orders')
+    items = db.relationship('SalesOrderItem', backref='sales_order', cascade='all, delete-orphan')
 
-        CREATE TABLE IF NOT EXISTS sales_orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            order_no TEXT NOT NULL UNIQUE,
-            customer_id INTEGER NOT NULL,
-            order_date TEXT NOT NULL,
-            total_amount REAL NOT NULL DEFAULT 0,
-            paid_amount REAL NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'draft',
-            notes TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (customer_id) REFERENCES customers(id)
-        );
+class SalesOrderItem(db.Model):
+    __tablename__ = 'sales_order_items'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    sales_order_id = db.Column(db.Integer, db.ForeignKey('sales_orders.id', ondelete='CASCADE'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    qty = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    product = db.relationship('Product')
 
-        CREATE TABLE IF NOT EXISTS sales_order_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sales_order_id INTEGER NOT NULL,
-            product_id INTEGER NOT NULL,
-            qty INTEGER NOT NULL,
-            price REAL NOT NULL,
-            amount REAL NOT NULL,
-            FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
-            FOREIGN KEY (product_id) REFERENCES products(id)
-        );
+class PurchaseOrder(db.Model):
+    __tablename__ = 'purchase_orders'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    order_no = db.Column(db.String(50), unique=True, nullable=False)
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=False)
+    order_date = db.Column(db.String(20), nullable=False)
+    total_amount = db.Column(db.Float, nullable=False, default=0)
+    paid_amount = db.Column(db.Float, nullable=False, default=0)
+    status = db.Column(db.String(20), nullable=False, default='draft')
+    notes = db.Column(db.Text, default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    supplier = db.relationship('Supplier', backref='purchase_orders')
+    items = db.relationship('PurchaseOrderItem', backref='purchase_order', cascade='all, delete-orphan')
 
-        CREATE TABLE IF NOT EXISTS purchase_orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            order_no TEXT NOT NULL UNIQUE,
-            supplier_id INTEGER NOT NULL,
-            order_date TEXT NOT NULL,
-            total_amount REAL NOT NULL DEFAULT 0,
-            paid_amount REAL NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'draft',
-            notes TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
-        );
+class PurchaseOrderItem(db.Model):
+    __tablename__ = 'purchase_order_items'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_orders.id', ondelete='CASCADE'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    qty = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    product = db.relationship('Product')
 
-        CREATE TABLE IF NOT EXISTS purchase_order_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            purchase_order_id INTEGER NOT NULL,
-            product_id INTEGER NOT NULL,
-            qty INTEGER NOT NULL,
-            price REAL NOT NULL,
-            amount REAL NOT NULL,
-            FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
-            FOREIGN KEY (product_id) REFERENCES products(id)
-        );
+class InventoryLog(db.Model):
+    __tablename__ = 'inventory_logs'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    change_type = db.Column(db.String(30), nullable=False)
+    qty = db.Column(db.Integer, nullable=False)
+    before_qty = db.Column(db.Integer, nullable=False)
+    after_qty = db.Column(db.Integer, nullable=False)
+    reference = db.Column(db.String(100), default='')
+    notes = db.Column(db.Text, default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    product = db.relationship('Product')
 
-        CREATE TABLE IF NOT EXISTS inventory_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_id INTEGER NOT NULL,
-            change_type TEXT NOT NULL,
-            qty INTEGER NOT NULL,
-            before_qty INTEGER NOT NULL,
-            after_qty INTEGER NOT NULL,
-            reference TEXT DEFAULT '',
-            notes TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (product_id) REFERENCES products(id)
-        );
-    ''')
+# ── Init ────────────────────────────────────────────────
 
-    # Seed data if empty
-    if cursor.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
-        _seed_data(conn)
+def init_db(app):
+    """Initialize database: create tables + seed if empty."""
+    db.init_app(app)
+    with app.app_context():
+        db.create_all()
+        if Product.query.count() == 0:
+            _seed_data()
 
-    conn.commit()
-    conn.close()
-
-def _seed_data(conn):
-    cursor = conn.cursor()
+def _seed_data():
     now = datetime.now()
     date_str = now.strftime('%Y-%m-%d')
 
-    # Products
     products = [
-        ('P001', '螺丝刀套装', '工具', '套', 45.00, 28.00, 150, 20),
-        ('P002', '不锈钢螺栓 M8', '紧固件', '个', 2.50, 1.20, 2000, 200),
-        ('P003', 'LED灯泡 12W', '电器', '个', 18.00, 10.00, 300, 30),
-        ('P004', '钢板 2mm', '原材料', '张', 120.00, 85.00, 200, 10),
-        ('P005', '橡胶密封圈', '密封件', '个', 3.50, 1.80, 800, 100),
-        ('P006', '电钻 D-100', '工具', '台', 380.00, 250.00, 100, 5),
-        ('P007', '角铁 40x40', '原材料', '根', 35.00, 22.00, 200, 30),
-        ('P008', '工业手套', '劳保', '双', 8.00, 4.50, 500, 50),
+        Product(code='P001', name='螺丝刀套装', category='工具', unit='套', sale_price=45.00, purchase_price=28.00, stock_qty=150, min_stock=20),
+        Product(code='P002', name='不锈钢螺栓 M8', category='紧固件', unit='个', sale_price=2.50, purchase_price=1.20, stock_qty=2000, min_stock=200),
+        Product(code='P003', name='LED灯泡 12W', category='电器', unit='个', sale_price=18.00, purchase_price=10.00, stock_qty=300, min_stock=30),
+        Product(code='P004', name='钢板 2mm', category='原材料', unit='张', sale_price=120.00, purchase_price=85.00, stock_qty=200, min_stock=10),
+        Product(code='P005', name='橡胶密封圈', category='密封件', unit='个', sale_price=3.50, purchase_price=1.80, stock_qty=800, min_stock=100),
+        Product(code='P006', name='电钻 D-100', category='工具', unit='台', sale_price=380.00, purchase_price=250.00, stock_qty=100, min_stock=5),
+        Product(code='P007', name='角铁 40x40', category='原材料', unit='根', sale_price=35.00, purchase_price=22.00, stock_qty=200, min_stock=30),
+        Product(code='P008', name='工业手套', category='劳保', unit='双', sale_price=8.00, purchase_price=4.50, stock_qty=500, min_stock=50),
     ]
-    cursor.executemany(
-        "INSERT INTO products (code, name, category, unit, sale_price, purchase_price, stock_qty, min_stock) VALUES (?,?,?,?,?,?,?,?)",
-        products
-    )
+    db.session.add_all(products)
+    db.session.flush()
 
-    # Customers
     customers = [
-        ('深圳华强电子有限公司', '张伟', '13800138001', 'zhangwei@huaqiang.cn', '深圳市福田区华强北路1001号'),
-        ('上海建工集团', '李明', '13900139002', 'liming@shjg.com', '上海市浦东新区世纪大道200号'),
-        ('广州天河机械设备公司', '王芳', '13700137003', 'wangfang@gzth.com', '广州市天河区中山大道西88号'),
-        ('北京中关村科技有限公司', '赵强', '13600136004', 'zhaoq@zgctech.cn', '北京市海淀区中关村大街1号'),
+        Customer(name='深圳华强电子有限公司', contact_person='张伟', phone='13800138001', email='zhangwei@huaqiang.cn', address='深圳市福田区华强北路1001号'),
+        Customer(name='上海建工集团', contact_person='李明', phone='13900139002', email='liming@shjg.com', address='上海市浦东新区世纪大道200号'),
+        Customer(name='广州天河机械设备公司', contact_person='王芳', phone='13700137003', email='wangfang@gzth.com', address='广州市天河区中山大道西88号'),
+        Customer(name='北京中关村科技有限公司', contact_person='赵强', phone='13600136004', email='zhaoq@zgctech.cn', address='北京市海淀区中关村大街1号'),
     ]
-    cursor.executemany(
-        "INSERT INTO customers (name, contact_person, phone, email, address) VALUES (?,?,?,?,?)",
-        customers
-    )
+    db.session.add_all(customers)
+    db.session.flush()
 
-    # Suppliers
     suppliers = [
-        ('东莞永固五金制品厂', '陈志明', '13500135001', 'chenzm@yonggu.cn', '东莞市长安镇振安路168号'),
-        ('佛山顺德钢材贸易公司', '刘建国', '13400134002', 'liujg@sdsteel.com', '佛山市顺德区乐从镇钢铁市场A区'),
-        ('浙江温州电器批发城', '林小红', '13300133003', 'linxh@wzdq.cn', '温州市鹿城区车站大道99号'),
+        Supplier(name='东莞永固五金制品厂', contact_person='陈志明', phone='13500135001', email='chenzm@yonggu.cn', address='东莞市长安镇振安路168号'),
+        Supplier(name='佛山顺德钢材贸易公司', contact_person='刘建国', phone='13400134002', email='liujg@sdsteel.com', address='佛山市顺德区乐从镇钢铁市场A区'),
+        Supplier(name='浙江温州电器批发城', contact_person='林小红', phone='13300133003', email='linxh@wzdq.cn', address='温州市鹿城区车站大道99号'),
     ]
-    cursor.executemany(
-        "INSERT INTO suppliers (name, contact_person, phone, email, address) VALUES (?,?,?,?,?)",
-        suppliers
-    )
+    db.session.add_all(suppliers)
+    db.session.flush()
 
-    # Sales Orders
+    # Sales orders with seed data
     for i in range(1, 6):
         order_no = f'SO-{now.year}{now.month:02d}{now.day:02d}-{i:03d}'
         order_date = (now - timedelta(days=random.randint(0, 30))).strftime('%Y-%m-%d')
         customer_id = random.randint(1, 4)
         status = random.choice(['confirmed', 'shipped', 'completed'])
-        cursor.execute(
-            "INSERT INTO sales_orders (order_no, customer_id, order_date, total_amount, paid_amount, status, notes) VALUES (?,?,?,0,0,?,'')",
-            (order_no, customer_id, order_date, status)
-        )
-        so_id = cursor.lastrowid
+        so = SalesOrder(order_no=order_no, customer_id=customer_id, order_date=order_date, total_amount=0, paid_amount=0, status=status)
+        db.session.add(so)
+        db.session.flush()
         total = 0
         for _ in range(random.randint(1, 4)):
             pid = random.randint(1, 8)
             qty = random.randint(2, 20)
-            price = cursor.execute("SELECT sale_price FROM products WHERE id=?", (pid,)).fetchone()[0]
+            product = Product.query.get(pid)
+            price = product.sale_price
             amount = round(qty * price, 2)
             total += amount
-            cursor.execute(
-                "INSERT INTO sales_order_items (sales_order_id, product_id, qty, price, amount) VALUES (?,?,?,?,?)",
-                (so_id, pid, qty, price, amount)
-            )
+            db.session.add(SalesOrderItem(sales_order_id=so.id, product_id=pid, qty=qty, price=price, amount=amount))
             if status in ('confirmed', 'shipped', 'completed'):
-                cursor.execute("UPDATE products SET stock_qty = stock_qty - ? WHERE id=?", (qty, pid))
-                cursor.execute(
-                    "INSERT INTO inventory_logs (product_id, change_type, qty, before_qty, after_qty, reference) VALUES (?, 'sale', ?, (SELECT stock_qty FROM products WHERE id=?) + ?, (SELECT stock_qty FROM products WHERE id=?), ?)",
-                    (pid, qty, pid, qty, pid, order_no)
-                )
-        cursor.execute("UPDATE sales_orders SET total_amount=? WHERE id=?", (round(total, 2), so_id))
-        # Set paid equal to total for completed orders
+                before_qty = product.stock_qty
+                after_qty = before_qty - qty
+                product.stock_qty = after_qty
+                db.session.add(InventoryLog(product_id=pid, change_type='sale', qty=qty, before_qty=before_qty, after_qty=after_qty, reference=order_no))
+        so.total_amount = round(total, 2)
         if status == 'completed':
-            cursor.execute("UPDATE sales_orders SET paid_amount=? WHERE id=?", (round(total, 2), so_id))
+            so.paid_amount = round(total, 2)
         elif status in ('confirmed', 'shipped'):
-            cursor.execute("UPDATE sales_orders SET paid_amount=? WHERE id=?", (round(total * random.uniform(0.3, 0.8), 2), so_id))
+            so.paid_amount = round(total * random.uniform(0.3, 0.8), 2)
 
-    conn.commit()
+    db.session.commit()

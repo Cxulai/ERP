@@ -1,62 +1,38 @@
 from flask import Blueprint, request, jsonify
-from database import get_db
+from database import db, SalesOrder, PurchaseOrder, SalesOrderItem, Product
+from datetime import datetime
+from sqlalchemy import func
 
 reports_bp = Blueprint('reports', __name__)
 
 @reports_bp.route('/reports')
 def get_reports():
     report_type = request.args.get('type', 'summary')
-
-    conn = get_db()
-    cursor = conn.cursor()
+    now = datetime.now()
+    month_start = now.strftime('%Y-%m-01')
 
     if report_type == 'summary':
-        # Current month summary
-        now = cursor.execute("SELECT datetime('now', 'localtime')").fetchone()[0]
-        month_start = now[:8] + '01'
+        sales_revenue = db.session.query(func.coalesce(func.sum(SalesOrder.total_amount), 0))\
+            .filter(SalesOrder.order_date >= month_start, SalesOrder.status == 'completed').scalar()
 
-        sales_revenue = cursor.execute(
-            "SELECT COALESCE(SUM(total_amount), 0) FROM sales_orders WHERE order_date >= ? AND status = 'completed'",
-            (month_start,)
-        ).fetchone()[0]
+        sales_pending = db.session.query(func.coalesce(func.sum(SalesOrder.total_amount), 0))\
+            .filter(SalesOrder.status.in_(['confirmed', 'shipped'])).scalar()
 
-        sales_pending = cursor.execute(
-            "SELECT COALESCE(SUM(total_amount), 0) FROM sales_orders WHERE status IN ('confirmed', 'shipped')"
-        ).fetchone()[0]
+        purchase_cost = db.session.query(func.coalesce(func.sum(PurchaseOrder.total_amount), 0))\
+            .filter(PurchaseOrder.order_date >= month_start, PurchaseOrder.status == 'completed').scalar()
 
-        purchase_cost = cursor.execute(
-            "SELECT COALESCE(SUM(total_amount), 0) FROM purchase_orders WHERE order_date >= ? AND status = 'completed'",
-            (month_start,)
-        ).fetchone()[0]
+        purchase_pending = db.session.query(func.coalesce(func.sum(PurchaseOrder.total_amount), 0))\
+            .filter(PurchaseOrder.status == 'confirmed').scalar()
 
-        purchase_pending = cursor.execute(
-            "SELECT COALESCE(SUM(total_amount), 0) FROM purchase_orders WHERE status IN ('confirmed')"
-        ).fetchone()[0]
+        receivables = db.session.query(func.coalesce(func.sum(SalesOrder.total_amount - SalesOrder.paid_amount), 0))\
+            .filter(SalesOrder.status.notin_(['draft', 'cancelled'])).scalar()
 
-        # Receivables (unpaid amounts from completed/confirmed/shipped sales)
-        receivables = cursor.execute(
-            "SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM sales_orders WHERE status NOT IN ('draft', 'cancelled')"
-        ).fetchone()[0]
+        payables = db.session.query(func.coalesce(func.sum(PurchaseOrder.total_amount - PurchaseOrder.paid_amount), 0))\
+            .filter(PurchaseOrder.status.notin_(['draft', 'cancelled'])).scalar()
 
-        # Payables
-        payables = cursor.execute(
-            "SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM purchase_orders WHERE status NOT IN ('draft', 'cancelled')"
-        ).fetchone()[0]
-
-        # Order counts
-        sales_count = cursor.execute(
-            "SELECT COUNT(*) FROM sales_orders WHERE order_date >= ?",
-            (month_start,)
-        ).fetchone()[0]
-
-        purchase_count = cursor.execute(
-            "SELECT COUNT(*) FROM purchase_orders WHERE order_date >= ?",
-            (month_start,)
-        ).fetchone()[0]
-
+        sales_count = SalesOrder.query.filter(SalesOrder.order_date >= month_start).count()
+        purchase_count = PurchaseOrder.query.filter(PurchaseOrder.order_date >= month_start).count()
         profit = round(sales_revenue - purchase_cost, 2)
-
-        conn.close()
 
         return jsonify({
             'sales_revenue': round(sales_revenue, 2),
@@ -71,48 +47,49 @@ def get_reports():
         })
 
     elif report_type == 'income':
-        # Monthly income trend (last 12 months)
-        monthly = cursor.execute(
-            """SELECT strftime('%Y-%m', order_date) as month,
-                      SUM(CASE WHEN status = 'completed' THEN total_amount ELSE 0 END) as completed_amount,
-                      SUM(CASE WHEN status NOT IN ('draft', 'cancelled') THEN total_amount ELSE 0 END) as total_amount,
-                      COUNT(*) as order_count
-               FROM sales_orders
-               GROUP BY month ORDER BY month ASC"""
-        ).fetchall()
+        # Aggregate monthly trends in Python (portable across SQLite + PostgreSQL)
+        all_sales = SalesOrder.query.all()
+        sales_monthly = {}
+        for so in all_sales:
+            month = so.order_date[:7]
+            if month not in sales_monthly:
+                sales_monthly[month] = {'completed_amount': 0, 'total_amount': 0, 'order_count': 0}
+            if so.status == 'completed':
+                sales_monthly[month]['completed_amount'] += so.total_amount
+            if so.status not in ('draft', 'cancelled'):
+                sales_monthly[month]['total_amount'] += so.total_amount
+            sales_monthly[month]['order_count'] += 1
 
-        # Monthly purchase trend
-        monthly_purchase = cursor.execute(
-            """SELECT strftime('%Y-%m', order_date) as month,
-                      SUM(CASE WHEN status = 'completed' THEN total_amount ELSE 0 END) as completed_amount,
-                      SUM(CASE WHEN status NOT IN ('draft', 'cancelled') THEN total_amount ELSE 0 END) as total_amount,
-                      COUNT(*) as order_count
-               FROM purchase_orders
-               GROUP BY month ORDER BY month ASC"""
-        ).fetchall()
-
-        conn.close()
+        all_purchases = PurchaseOrder.query.all()
+        purchase_monthly = {}
+        for po in all_purchases:
+            month = po.order_date[:7]
+            if month not in purchase_monthly:
+                purchase_monthly[month] = {'completed_amount': 0, 'total_amount': 0, 'order_count': 0}
+            if po.status == 'completed':
+                purchase_monthly[month]['completed_amount'] += po.total_amount
+            if po.status not in ('draft', 'cancelled'):
+                purchase_monthly[month]['total_amount'] += po.total_amount
+            purchase_monthly[month]['order_count'] += 1
 
         return jsonify({
-            'sales_monthly': [dict(row) for row in monthly],
-            'purchase_monthly': [dict(row) for row in monthly_purchase]
+            'sales_monthly': [{'month': k, **v} for k, v in sorted(sales_monthly.items())],
+            'purchase_monthly': [{'month': k, **v} for k, v in sorted(purchase_monthly.items())]
         })
 
     elif report_type == 'top-products':
-        # Top selling products
-        top_products = cursor.execute(
-            """SELECT p.id, p.name, p.code,
-                      COALESCE(SUM(soi.qty), 0) as total_qty,
-                      COALESCE(SUM(soi.amount), 0) as total_amount
-               FROM products p
-               LEFT JOIN sales_order_items soi ON p.id = soi.product_id
-               LEFT JOIN sales_orders so ON soi.sales_order_id = so.id AND so.status = 'completed'
-               GROUP BY p.id ORDER BY total_qty DESC LIMIT 10"""
-        ).fetchall()
+        results = db.session.query(
+            Product.id, Product.name, Product.code,
+            func.coalesce(func.sum(SalesOrderItem.qty), 0).label('total_qty'),
+            func.coalesce(func.sum(SalesOrderItem.amount), 0).label('total_amount')
+        ).outerjoin(SalesOrderItem, Product.id == SalesOrderItem.product_id)\
+         .outerjoin(SalesOrder, db.and_(SalesOrderItem.sales_order_id == SalesOrder.id, SalesOrder.status == 'completed'))\
+         .group_by(Product.id).order_by(func.sum(SalesOrderItem.qty).desc()).limit(10).all()
 
-        conn.close()
-        return jsonify([dict(row) for row in top_products])
+        return jsonify([{
+            'id': r.id, 'name': r.name, 'code': r.code,
+            'total_qty': int(r.total_qty or 0), 'total_amount': round(r.total_amount or 0, 2)
+        } for r in results])
 
     else:
-        conn.close()
         return jsonify({'error': '未知报表类型'}), 400
