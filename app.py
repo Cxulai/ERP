@@ -14,9 +14,12 @@ def create_app():
     # Database config: PostgreSQL when DATABASE_URL set (Vercel), SQLite otherwise (local)
     raw_url = os.environ.get('DATABASE_URL', 'sqlite:///erp.db')
 
-    # Vercel Postgres uses 'postgres://' which SQLAlchemy 1.4+ rejects
+    # Vercel Postgres uses 'postgres://' which SQLAlchemy 1.4+ rejects.
+    # pg8000 must be specified as the driver, else SQLAlchemy defaults to psycopg2.
     if raw_url.startswith('postgres://'):
-        raw_url = raw_url.replace('postgres://', 'postgresql://', 1)
+        raw_url = raw_url.replace('postgres://', 'postgresql+pg8000://', 1)
+    elif 'postgresql://' in raw_url and '+pg8000' not in raw_url:
+        raw_url = raw_url.replace('postgresql://', 'postgresql+pg8000://', 1)
 
     # Add SSL for cloud PostgreSQL
     if 'postgresql://' in raw_url and 'sslmode=' not in raw_url:
@@ -41,16 +44,12 @@ def create_app():
 
     # Init DB inside app context
     from database import db, init_db
-    db.init_app(app)
     with app.app_context():
         try:
-            db.create_all()
-            from database import Product
-            if Product.query.count() == 0:
-                from database import _seed_data
-                _seed_data()
+            init_db(app)
         except Exception as e:
             app.logger.error(f"DB init failed: {e}")
+            # Don't crash — app can still serve static pages without DB
 
     return app
 
