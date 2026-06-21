@@ -21,13 +21,21 @@ def create_app():
     elif 'postgresql://' in raw_url and '+pg8000' not in raw_url:
         raw_url = raw_url.replace('postgresql://', 'postgresql+pg8000://', 1)
 
-    # Add SSL for cloud PostgreSQL
-    if 'postgresql://' in raw_url and 'sslmode=' not in raw_url:
-        separator = '&' if '?' in raw_url else '?'
-        raw_url += f'{separator}sslmode=require'
+    # Strip sslmode= param — pg8000 doesn't understand it (libpq-only convention)
+    import re
+    raw_url = re.sub(r'[?&]sslmode=[^&]*', '', raw_url)
+    # Clean up trailing ? or dangling & from sslmode removal
+    raw_url = re.sub(r'\?&', '?', raw_url)
+    raw_url = re.sub(r'\?$', '', raw_url)
 
     app.config['SQLALCHEMY_DATABASE_URI'] = raw_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+    # pg8000 SSL: use ssl_context=True, not sslmode=require (libpq-only)
+    if 'postgresql' in raw_url:
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+            'connect_args': {'ssl_context': True}
+        }
 
     # Register blueprints
     app.register_blueprint(dashboard_bp, url_prefix='/api')
