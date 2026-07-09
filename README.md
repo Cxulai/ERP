@@ -230,44 +230,218 @@ A: 这是为了防止误删。请先将订单取消，再删除。
 
 ---
 
-## 八、技术架构
+## 八、系统架构
+
+### 8.1 架构图
 
 ```
-前端: HTML5 + CSS3 + Vanilla JavaScript + Chart.js
-后端: Python 3 + Flask
-数据库: SQLite3 (本地) / PostgreSQL (Vercel 云端)
-架构: SPA (Hash 路由) + RESTful API + SQLAlchemy ORM
+┌─────────────────────────────────────────────────────────────┐
+│                        浏览器 (Client)                       │
+│              HTML5 + CSS3 + Vanilla JS + Chart.js            │
+│                    SPA (Hash 路由)                            │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ HTTP REST API
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Flask 应用层 (Python 3)                    │
+│                                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │ 仪表盘    │  │ 商品管理  │  │ 客户管理  │  │ 供应商    │   │
+│  │ Dashboard │  │ Products │  │ Customers│  │ Suppliers│   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
+│  │ 销售订单  │  │ 采购订单  │  │ 财务报表  │                  │
+│  │ Sales    │  │ Purchase │  │ Reports  │                  │
+│  └──────────┘  └──────────┘  └──────────┘                  │
+│                                                              │
+│  路由层: Blueprint 模式 (routes/*.py)                         │
+│  数据层: SQLAlchemy ORM (database.py)                        │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+              ┌────────────┴────────────┐
+              ▼                         ▼
+┌──────────────────────┐   ┌──────────────────────┐
+│   SQLite (本地开发)    │   │ PostgreSQL (Vercel)   │
+│   erp.db              │   │ pg8000 纯 Python 驱动 │
+└──────────────────────┘   └──────────────────────┘
 ```
 
-项目结构：
+### 8.2 技术栈
+
+| 层级 | 技术 | 说明 |
+|------|------|------|
+| 前端 | HTML5 + CSS3 + Vanilla JS + Chart.js | SPA 单页应用, Hash 路由 |
+| 后端 | Python 3.8+ + Flask | RESTful API, Blueprint 模块化 |
+| ORM | SQLAlchemy | 统一 SQLite / PostgreSQL 接口 |
+| 数据库 | SQLite (本地) / PostgreSQL (云端) | pg8000 纯 Python 驱动 |
+| 部署 | Vercel Serverless | WSGI 入口 api/index.py |
+| AI 工具 | Claude Code + Claude API | 全栈开发加速、架构设计、代码审查 |
+
+### 8.3 AI 在项目中的角色
+
+本项目全程使用 **Claude Code** (Anthropic Claude 系列模型) 辅助开发：
+
+| 阶段 | AI 承担角色 | 具体应用 |
+|------|------------|---------|
+| **架构设计** | 技术选型顾问 | SQLAlchemy ORM 迁移方案、多数据库兼容策略 |
+| **代码生成** | 全栈开发助手 | Flask 路由蓝图、前端 SPA 路由、Chart.js 图表 |
+| **数据库迁移** | 重构顾问 | sqlite3 → SQLAlchemy ORM 完整迁移、模型定义 |
+| **部署配置** | DevOps 助手 | Vercel Serverless 适配、pg8000 驱动调试 |
+| **代码审查** | Reviewer | diff 审查、bug 检测、性能分析 |
+| **文档生成** | 文档助手 | API 文档、使用手册、架构说明 |
+
+**AI 使用模式**: Agent 编排 + 工具调用 + 模型 API 调用  
+**AI 工具链**: Claude Code (主力) + GitHub Copilot (辅助)  
+**开发效率**: AI 辅助下，从零到完整 ERP 系统 + Vercel 部署，单人约 3 天完成
+
+---
+
+## 九、效果展示
+
+### 9.1 线上地址
+
+🔗 **Vercel 部署**: [https://erp-cao3.vercel.app](https://erp-cao3.vercel.app)
+
+### 9.2 功能截图
+
+> 💡 点击展开查看各功能模块截图。
+
+<details>
+<summary><b>📈 仪表盘</b> — KPI 概览 + 销售趋势 + 低库存预警</summary>
+<br>
+<p><i>(截图位置: <code>screenshots/dashboard.png</code> — 请添加截图)</i></p>
+</details>
+
+<details>
+<summary><b>📦 商品管理</b> — 商品列表 + 新增/编辑 + 库存调整</summary>
+<br>
+<p><i>(截图位置: <code>screenshots/products.png</code> — 请添加截图)</i></p>
+</details>
+
+<details>
+<summary><b>💰 销售订单</b> — 订单创建 + 状态流转 + 库存联动</summary>
+<br>
+<p><i>(截图位置: <code>screenshots/sales.png</code> — 请添加截图)</i></p>
+</details>
+
+<details>
+<summary><b>🛒 采购订单</b> — 供应商采购 + 收货入库</summary>
+<br>
+<p><i>(截图位置: <code>screenshots/purchases.png</code> — 请添加截图)</i></p>
+</details>
+
+<details>
+<summary><b>📋 财务报表</b> — 收支汇总 + 趋势图表</summary>
+<br>
+<p><i>(截图位置: <code>screenshots/reports.png</code> — 请添加截图)</i></p>
+</details>
+
+### 9.3 示例数据
+
+首次启动自动填充种子数据，方便快速体验：
+
+| 数据类型 | 数量 | 示例 |
+|---------|------|------|
+| 商品 | 8 个 | 白色T恤、蓝色牛仔裤、运动鞋、笔记本电脑... |
+| 客户 | 4 个 | 张三、李四、王五、赵六 |
+| 供应商 | 3 个 | 服装供应商A、电子供应商B、食品供应商C |
+| 销售订单 | 5 个 | 覆盖草稿→已完成各状态 |
+| 采购订单 | 3 个 | 覆盖不同状态流转 |
+
+---
+
+## 十、部署指南
+
+### 10.1 Vercel 部署（推荐）
+
+1. Fork 本仓库到你的 GitHub
+2. 在 [Vercel](https://vercel.com) 导入项目
+3. 添加 Vercel Postgres 数据库（自动注入 `DATABASE_URL`）
+4. 部署完成，访问生产 URL
+
+**部署配置** (`vercel.json`):
+```json
+{
+  "builds": [{"src": "api/index.py", "use": "@vercel/python"}],
+  "routes": [{"src": "/(.*)", "dest": "api/index.py"}]
+}
+```
+
+### 10.2 本地运行
+
+```bash
+git clone https://github.com/Cxulai/ERP.git
+cd erp-system
+pip install -r requirements.txt
+python app.py
+# 打开 http://localhost:5000
+```
+
+---
+
+## 十一、测试
+
+### 11.1 运行测试
+
+```bash
+pip install pytest
+pytest tests/ -v
+```
+
+### 11.2 测试覆盖
+
+| 测试模块 | 覆盖内容 |
+|---------|---------|
+| `tests/test_models.py` | 数据模型创建、字段验证、关系查询 |
+| `tests/test_api.py` | RESTful API 端点、HTTP 状态码、JSON 响应 |
+| `tests/test_business.py` | 订单状态流转、库存联动、金额计算 |
+
+### 11.3 测评指标
+
+| 指标 | 说明 | 目标 |
+|------|------|------|
+| API 响应时间 | 仪表盘聚合查询 | < 500ms |
+| 数据库查询 | 商品列表分页查询 | < 100ms |
+| 订单事务 | 创建订单+库存扣减 | 原子操作保证 |
+| 代码覆盖 | pytest 覆盖率 | > 80% |
+| 浏览器兼容 | Chrome / Edge / Firefox | 全兼容 |
+
+---
+
+## 十二、项目结构
 
 ```
 erp-system/
-├── app.py                 # Flask 主程序入口
-├── database.py            # SQLAlchemy 模型与数据库初始化
+├── app.py                 # Flask 主程序入口 (create_app 工厂模式)
+├── database.py            # SQLAlchemy 模型定义 + 种子数据
 ├── requirements.txt       # Python 依赖
 ├── vercel.json            # Vercel 部署配置
 ├── api/index.py           # Vercel WSGI 入口
 ├── erp.db                 # SQLite 数据库（本地运行自动生成）
-├── routes/                # API 路由蓝图
-│   ├── dashboard.py       # 仪表盘统计
-│   ├── products.py        # 商品与库存管理
-│   ├── customers.py       # 客户管理
-│   ├── suppliers.py       # 供应商管理
-│   ├── sales.py           # 销售订单
-│   ├── purchases.py       # 采购订单
-│   └── reports.py         # 财务报表
+├── screenshots/           # 功能截图
+├── tests/                 # 单元测试 & 集成测试
+│   ├── test_models.py     # 数据模型测试
+│   ├── test_api.py        # API 端点测试
+│   └── test_business.py   # 业务逻辑测试
+├── routes/                # API 路由蓝图 (7 个模块)
+│   ├── dashboard.py       # 仪表盘统计 API
+│   ├── products.py        # 商品与库存管理 API
+│   ├── customers.py       # 客户管理 API
+│   ├── suppliers.py       # 供应商管理 API
+│   ├── sales.py           # 销售订单 API
+│   ├── purchases.py       # 采购订单 API
+│   └── reports.py         # 财务报表 API
 ├── static/
 │   ├── css/style.css      # 统一样式
-│   └── js/                # 前端页面逻辑
-│       ├── app.js         # 核心路由与工具函数
-│       ├── dashboard.js   # 仪表盘
-│       ├── products.js    # 商品 + 库存流水
+│   └── js/                # 前端页面逻辑 (8 个模块)
+│       ├── app.js         # 核心路由 + 工具函数
+│       ├── dashboard.js   # 仪表盘 (KPI + Chart.js 图表)
+│       ├── products.js    # 商品管理 + 库存流水
 │       ├── customers.js   # 客户管理
 │       ├── suppliers.js   # 供应商管理
 │       ├── sales.js       # 销售订单
 │       ├── purchases.js   # 采购订单
 │       └── reports.js     # 财务报表
 └── templates/
-    └── index.html         # 页面骨架
+    └── index.html         # 页面骨架 (侧边栏 + Hash 路由容器)
 ```
