@@ -1,8 +1,10 @@
 # 📊 ERP 企业管理系统 - 使用手册
 
+> 🔗 **线上地址**: [https://erp-production-fe94.up.railway.app](https://erp-production-fe94.up.railway.app)
+
 ## 一、系统简介
 
-一个轻量级的企业资源计划（ERP）管理系统，采用 Python Flask + SQLAlchemy 构建，支持 SQLite（本地）和 PostgreSQL（云端部署），适合小微企业日常经营管理使用。
+一个轻量级的企业资源计划（ERP）管理系统，采用 Python Flask + SQLAlchemy 构建，支持 SQLite（本地）和 PostgreSQL（Railway 云端部署），适合小微企业日常经营管理使用。本项目使用 **Claude Code** (Anthropic Claude 系列模型) 全流程 AI 辅助开发。
 
 ### 核心功能模块
 
